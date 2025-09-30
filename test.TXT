@@ -1,1 +1,1 @@
-These are the changes in the version 3.
+This is the final version
