@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Simple Match‑3 Game</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin-top: 20px;
+    }
+    #game {
+      display: inline-grid;
+      grid-template-columns: repeat(6, 50px);
+      grid-gap: 4px;
+      margin: 20px auto;
+    }
+    .cell {
+      width: 50px;
+      height: 50px;
+      cursor: pointer;
+      border: 1px solid #999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      user-select: none;
+    }
+    .c1 { background: lightcoral; }
+    .c2 { background: lightblue; }
+    .c3 { background: lightgreen; }
+    .c4 { background: lightgoldenrodyellow; }
+    #info {
+      margin: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Mini Match‑3 Game</h1>
+  <div id="info">
+    <span id="score">Score: 0</span> |
+    <span id="moves">Moves left: 20</span>
+  </div>
+  <div id="game"></div>
+  <div id="message" style="font-size: 24px; margin-top: 20px;"></div>
+
+  <script>
+    const rows = 6, cols = 6;
+    const candyTypes = 4;
+    const gameDiv = document.getElementById('game');
+    const scoreSpan = document.getElementById('score');
+    const movesSpan = document.getElementById('moves');
+    const messageDiv = document.getElementById('message');
+
+    let grid = [];  // 2D array of candy types (1 to candyTypes)
+    let score = 0;
+    let moves = 20;
+    let selected = null;
+
+    // Initialize grid with random candies
+    function initGrid() {
+      grid = [];
+      for (let r = 0; r < rows; r++) {
+        const row = [];
+        for (let c = 0; c < cols; c++) {
+          row.push(randCandy());
+        }
+        grid.push(row);
+      }
+    }
+
+    function randCandy() {
+      return 1 + Math.floor(Math.random() * candyTypes);
+    }
+
+    // Render grid to DOM
+    function render() {
+      gameDiv.innerHTML = '';
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell', 'c' + grid[r][c]);
+          cell.dataset.r = r;
+          cell.dataset.c = c;
+          cell.addEventListener('click', cellClicked);
+          gameDiv.appendChild(cell);
+        }
+      }
+      scoreSpan.textContent = `Score: ${score}`;
+      movesSpan.textContent = `Moves left: ${moves}`;
+    }
+
+    // Handle cell click for swapping
+    function cellClicked(evt) {
+      if (messageDiv.textContent) return;  // game ended
+      const r = parseInt(evt.currentTarget.dataset.r);
+      const c = parseInt(evt.currentTarget.dataset.c);
+      if (!selected) {
+        selected = { r, c };
+        evt.currentTarget.style.border = '2px solid black';
+      } else {
+        const dr = Math.abs(selected.r - r);
+        const dc = Math.abs(selected.c - c);
+        if (dr + dc === 1) {
+          // adjacent — try swap
+          swap(selected.r, selected.c, r, c);
+          const matches = findMatches();
+          if (matches.length > 0) {
+            moves--;
+            resolveMatches(matches);
+            dropCandies();
+            fillEmpty();
+            maybeEnd();
+          } else {
+            // revert swap if no match
+            swap(selected.r, selected.c, r, c);
+          }
+        }
+        // reset selection
+        selected = null;
+        render();
+      }
+    }
+
+    function swap(r1, c1, r2, c2) {
+      const t = grid[r1][c1];
+      grid[r1][c1] = grid[r2][c2];
+      grid[r2][c2] = t;
+    }
+
+    // Find all matches (returns list of cells to clear)
+    function findMatches() {
+      const toClear = [];
+      // horizontal
+      for (let r = 0; r < rows; r++) {
+        let runStart = 0;
+        for (let c = 1; c <= cols; c++) {
+          if (c < cols && grid[r][c] === grid[r][runStart]) {
+            continue;
+          }
+          const runLen = c - runStart;
+          if (runLen >= 3) {
+            for (let k = runStart; k < c; k++) {
+              toClear.push({ r, c: k });
+            }
+          }
+          runStart = c;
+        }
+      }
+      // vertical
+      for (let c = 0; c < cols; c++) {
+        let runStart = 0;
+        for (let r = 1; r <= rows; r++) {
+          if (r < rows && grid[r][c] === grid[runStart][c]) {
+            continue;
+          }
+          const runLen = r - runStart;
+          if (runLen >= 3) {
+            for (let k = runStart; k < r; k++) {
+              toClear.push({ r: k, c });
+            }
+          }
+          runStart = r;
+        }
+      }
+      // Remove duplicates
+      const uniq = [];
+      const seen = new Set();
+      for (const cell of toClear) {
+        const key = cell.r + ',' + cell.c;
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniq.push(cell);
+        }
+      }
+      return uniq;
+    }
+
+    function resolveMatches(matches) {
+      for (const m of matches) {
+        grid[m.r][m.c] = 0;  // mark empty
+        score += 10;
+      }
+    }
+
+    function dropCandies() {
+      for (let c = 0; c < cols; c++) {
+        let pointer = rows - 1;
+        for (let r = rows - 1; r >= 0; r--) {
+          if (grid[r][c] !== 0) {
+            grid[pointer][c] = grid[r][c];
+            pointer--;
+          }
+        }
+        // fill remaining with 0s
+        for (let r = pointer; r >= 0; r--) {
+          grid[r][c] = 0;
+        }
+      }
+    }
+
+    function fillEmpty() {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c] === 0) {
+            grid[r][c] = randCandy();
+          }
+        }
+      }
+    }
+
+    function maybeEnd() {
+      const target = 1000;
+      if (score >= target) {
+        messageDiv.textContent = "🎉 You Win!";
+      } else if (moves <= 0) {
+        messageDiv.textContent = "Game Over";
+      }
+    }
+
+    // Start game
+    initGrid();
+    render();
+  </script>
+
+</body>
+</html>
